@@ -2,6 +2,9 @@ name: build-arm64-image
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
 
 jobs:
   build:
