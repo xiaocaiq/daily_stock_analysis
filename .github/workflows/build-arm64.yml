@@ -31,6 +31,11 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # 生成当前日期，格式：26.4.25（和你例子一致）
+      - name: Get current date
+        id: date
+        run: echo "DATE=$(date +'%y.%m.%d')" >> $GITHUB_OUTPUT
+
       - name: Build and push ARM64 image
         uses: docker/build-push-action@v6
         with:
@@ -38,4 +43,6 @@ jobs:
           file: ./docker/Dockerfile
           push: true
           platforms: linux/arm64
-          tags: ghcr.io/${{ github.repository_owner }}/daily_stock_analysis:arm64
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/daily_stock_analysis:arm64
+            ghcr.io/${{ github.repository_owner }}/daily_stock_analysis:arm64-${{ steps.date.outputs.DATE }}
