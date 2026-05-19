@@ -1,0 +1,144 @@
+name: 定时补偿
+
+on:
+    # 定时补偿触发（北京时间）
+    schedule:
+        - cron: '53 3 * * 1-5'    # 周一到周五，北京时间 11:53
+        - cron: '23 4 * * 1-5'    # 周一到周五，北京时间 12:23
+        - cron: '53 7 * * 1-5'    # 周一到周五，北京时间 15:53
+        - cron: '23 8 * * 1-5'    # 周一到周五，北京时间 16:23
+
+    # 支持手动触发，便于测试
+    workflow_dispatch:
+
+permissions:
+    actions: write
+    contents: read
+
+concurrency:
+    # 防止补偿 workflow 自己并发重入
+    group: schedule-compensation
+    cancel-in-progress: false
+
+jobs:
+    compensate:
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: 检查并补偿缺失的定时任务
+              uses: actions/github-script@v7
+              with:
+                  script: |
+                      const owner = context.repo.owner;
+                      const repo = context.repo.repo;
+                      const defaultBranch = context.payload.repository.default_branch;
+
+                      // 这里写你要补偿的两个 workflow 文件名
+                      // 必须与 .github/workflows/ 里的实际文件名完全一致
+                      const targets = [
+                        {
+                          workflowFile: '股票分析.yml',
+                          workflowName: '股票分析'
+                        },
+                        {
+                          workflowFile: '大盘复盘.yml',
+                          workflowName: '大盘复盘'
+                        }
+                      ];
+
+                      function toChinaTime(date) {
+                        return new Date(date.getTime() + 8 * 60 * 60 * 1000);
+                      }
+
+                      function formatDateCN(date) {
+                        const y = date.getUTCFullYear();
+                        const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+                        const d = String(date.getUTCDate()).padStart(2, '0');
+                        return `${y}-${m}-${d}`;
+                      }
+
+                      const nowUtc = new Date();
+                      const nowCn = toChinaTime(nowUtc);
+                      const todayCn = formatDateCN(nowCn);
+                      const hourCn = nowCn.getUTCHours();
+                      const minuteCn = nowCn.getUTCMinutes();
+
+                      let windowLabel;
+                      let windowStartCn;
+                      let windowEndCn;
+
+                      // 中午补偿窗口：覆盖 11:30 ~ 12:30
+                      if (
+                        (hourCn === 11 && minuteCn >= 53) ||
+                        (hourCn === 12 && minuteCn <= 23)
+                      ) {
+                        windowLabel = '中午';
+                        windowStartCn = new Date(`${todayCn}T11:30:00+08:00`);
+                        windowEndCn = new Date(`${todayCn}T12:30:00+08:00`);
+                      }
+                      // 下午补偿窗口：覆盖 15:30 ~ 16:30
+                      else if (
+                        (hourCn === 15 && minuteCn >= 53) ||
+                        (hourCn === 16 && minuteCn <= 23)
+                      ) {
+                        windowLabel = '下午';
+                        windowStartCn = new Date(`${todayCn}T15:30:00+08:00`);
+                        windowEndCn = new Date(`${todayCn}T16:30:00+08:00`);
+                      } else {
+                        core.setFailed(`当前补偿运行时间不在预期窗口内：UTC=${nowUtc.toISOString()}`);
+                        return;
+                      }
+
+                      core.info(`Now UTC: ${nowUtc.toISOString()}`);
+                      core.info(`Now CN : ${nowCn.toISOString()}`);
+                      core.info(`Window [${windowLabel}] => ${windowStartCn.toISOString()} ~ ${windowEndCn.toISOString()}`);
+                      for (const target of targets) {
+                        core.info(`Checking workflow: ${target.workflowName} (${target.workflowFile})`);
+
+                        const runsResp = await github.rest.actions.listWorkflowRuns({
+                          owner,
+                          repo,
+                          workflow_id: target.workflowFile,
+                          per_page: 50
+                        });
+
+                        const matchedRuns = runsResp.data.workflow_runs.filter((run) => {
+                          const createdAt = new Date(run.created_at);
+                          return createdAt >= windowStartCn && createdAt <= windowEndCn;
+                        });
+
+                        if (matchedRuns.length > 0) {
+                          core.info(
+                            `Matched runs for ${target.workflowName}: ` +
+                            matchedRuns
+                              .map((run) => `${run.id}/${run.event}/${run.status}/${run.conclusion}/${run.created_at}`)
+                              .join(' | ')
+                          );
+                        } else {
+                          core.info(`Matched runs for ${target.workflowName}: none`);
+                        }
+
+                        const successRun = matchedRuns.find(
+                          (run) => run.status === 'completed' && run.conclusion === 'success'
+                        );
+
+                        if (successRun) {
+                          core.info(
+                            `Already succeeded in ${windowLabel} window: ${target.workflowName}, run_id=${successRun.id}`
+                          );
+                          continue;
+                        }
+
+                        core.warning(
+                          `No successful run found for ${target.workflowName} in ${windowLabel} window, dispatching compensation run`
+                        );
+
+                        await github.rest.actions.createWorkflowDispatch({
+                          owner,
+                          repo,
+                          workflow_id: target.workflowFile,
+                          ref: defaultBranch
+                        });
+
+                        core.info(`Compensation dispatched for ${target.workflowName}`);
+                      }
