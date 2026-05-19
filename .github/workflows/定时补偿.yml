@@ -99,7 +99,7 @@ jobs:
                           owner,
                           repo,
                           workflow_id: target.workflowFile,
-                          per_page: 50
+                          per_page: 100
                         });
 
                         const matchedRuns = runsResp.data.workflow_runs.filter((run) => {
@@ -119,7 +119,10 @@ jobs:
                         }
 
                         const successRun = matchedRuns.find(
-                          (run) => run.status === 'completed' && run.conclusion === 'success'
+                          (run) =>
+                          run.event === 'schedule' &&
+                          run.status === 'completed' &&
+                          run.conclusion === 'success'
                         );
 
                         if (successRun) {
