@@ -120,7 +120,7 @@ jobs:
 
                         const successRun = matchedRuns.find(
                           (run) =>
-                          run.event === 'schedule' &&
+                          (run.event === 'schedule' || run.event === 'workflow_dispatch') &&
                           run.status === 'completed' &&
                           run.conclusion === 'success'
                         );
