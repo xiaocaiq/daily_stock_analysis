@@ -70,6 +70,7 @@ Web setup: open **Settings → Agent → Ask-stock method**, choose **Codex loca
 - The Phase 6 Codex App Server Agent currently supports macOS, Linux, and environments where the complete DSA backend runs inside WSL. Native Windows backends are rejected before status probing or transport startup. This does not change the existing Windows generation support for Phase 2 `GENERATION_BACKEND=codex_cli`.
 - Codex currently exposes read-only access only to saved analysis context, overall backtest summaries, and strategy backtest summaries. This phase validates and promises the independent-process, stop, timeout, and cleanup lifecycle only for those three tools. Live quotes, news, market hotspots, technical-indicator recalculation, per-stock backtest details, and portfolio tools were not validated in this phase and are therefore omitted from the Codex tool list; choose **Default model** when you need them. An explicit symbol or one uniquely selected Web stock only establishes the stock scope for the exposed historical-analysis-context tool; DSA does not guess across ambiguous listings.
 - This is not an offline model. Services configured in Codex may process stock symbols, questions, news, position context, and redacted tool results.
+- Codex Chat receives the active trading Skill instructions. Omitting selection inherits the saved session selection (new sessions use defaults); an explicit empty list clears the saved selection and returns to defaults. Skills only interpret saved data from the three read-only tools and cannot expand tool permissions. Missing data or capabilities must be disclosed without claiming complete Skill execution.
 - Only single-agent Chat is supported. Codex Multi Agent and Codex Deep Research are not supported. Existing LiteLLM Multi Agent and Deep Research remain unchanged.
 - Each Chat request creates a new ephemeral App Server thread. DSA retains the existing visible session history and injects it into the next request, but it does not inject LiteLLM provider traces. Web clients do not receive chain-of-thought, raw JSON-RPC, stderr, or complete tool arguments/results; Codex receives only the redacted tool results needed for that turn.
 - When the user stops ask-stock Chat, the page first shows **Stopping**. DSA interrupts the Codex turn and terminates and reaps the independently running tool process for that turn. The original Chat request reports **Stopped** only after both Codex and the tool process have exited. Timeouts and client disconnects use the same cleanup boundary, so a turn is never reported as finished while its background work is still running. This contract applies only to Codex and does not change the default LiteLLM Agent execution path.
@@ -100,13 +101,13 @@ If you only plan to use one single model, this is the fastest way. Open the `.en
 
 ### Anspire Open Example:
 
-> 💡 **[Anspire Open](https://open.anspire.cn/?share_code=QFBC0FYC)**: supports Chinese-optimized search and OpenAI-compatible model access using a shared key.
+> 💡 **[Anspire Open](https://open.anspire.cn/dsa?share_code=QFBC0FYC)**: supports Chinese-optimized search and OpenAI-compatible model access using a shared key.
 > - The following values are configuration examples only; model availability depends on your account and Anspire console.
 > - Documentation examples do not replace connectivity validation; please validate with the Web "Test connection" flow before relying on production traffic.
 
 ```env
 # Anspire Open API keys (multiple keys supported, separated by commas)
-# Get your key at: https://open.anspire.cn/?share_code=QFBC0FYC
+# Get your key at: https://open.anspire.cn/dsa?share_code=QFBC0FYC
 # When no higher-priority OpenAI-compatible source is set, this key is reused for Anspire search + LLM path (example fallback behavior only).
 # Example model: Doubao-Seed-2.0-lite; example gateway: https://open-gateway.anspire.cn/v6
 ANSPIRE_API_KEYS=sk-xxxxxxxxxxxxxxxx
@@ -196,7 +197,7 @@ The backend exposes a read-only status endpoint at `GET /api/v1/system/config/se
 - OpenAI-compatible routing in LiteLLM: <https://docs.litellm.ai/docs/providers/openai_compatible>
 - OpenAI official API docs: <https://platform.openai.com/docs/api-reference/chat>
 - DeepSeek official API docs: <https://api-docs.deepseek.com/>
-- Anspire Open: <https://open.anspire.cn/?share_code=QFBC0FYC>
+- Anspire Open: <https://open.anspire.cn/dsa?share_code=QFBC0FYC>
 - DashScope OpenAI-compatible mode: <https://help.aliyun.com/zh/model-studio/compatibility-of-openai-with-dashscope>
 - Moonshot / Kimi official compatibility docs: <https://platform.moonshot.ai/docs/guide/compatibility>
 - Anthropic official Messages API: <https://docs.anthropic.com/en/api/messages>
